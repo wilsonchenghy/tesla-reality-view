@@ -21,9 +21,9 @@ if [ -z "$CAMDUMP_ONLY" ]; then   # the chase path needs no world
   ln -s $(realpath $FR) out/reality-data/enhanced
 fi
 $PY - <<PY
-import json
+import json, os
 p = 'out/reality-data/index.json'; d = json.load(open(p))
-d['gs'] = True; d['enhanced'] = {'n': 600, 'dir': 'enhanced'}
+d['gs'] = True; d['enhanced'] = {'n': 600, 'dir': 'enhanced'}; d['clip'] = os.environ.get('CLIP', 'clip_00')
 if $STATIC_IN_WORLD:     # parked vehicles are photoreal in the world: draw only traffic as models
     n0 = len(d['cars']); d['cars'] = [c for c in d['cars'] if not c.get('static')]; print('cars', n0, '->', len(d['cars']))
 import os

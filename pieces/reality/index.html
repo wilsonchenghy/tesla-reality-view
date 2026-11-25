@@ -659,7 +659,7 @@ piece({
       set(d, { transform: `translate(${sx.toFixed(1)}px, ${sy.toFixed(1)}px) rotate(${ang.toFixed(1)}deg) scale(${clamp(28 / dist, 0.35, 1.6).toFixed(3)})`, opacity: vis * 0.92 });
     });
     // drive card
-    ui.clock.textContent = `Drive · clip_00`;
+    ui.clock.textContent = `Drive · ${idx.clip || 'clip_00'}`;
     ui.sub.textContent = `t ${fmt(td)}  ·  seq ${Math.round(td * 36)}  ·  kf ${String(Math.max(0, ki)).padStart(3, '0')}`;
     ui.time.textContent = `${fmt(ft)} / ${fmt(T)}`;
     set(ui.bar, { width: Math.round(200 * ft / T) });
