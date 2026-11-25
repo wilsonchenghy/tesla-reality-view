@@ -13,9 +13,16 @@ meta = {e['i']: e for e in json.load(open(A.cams))['images']}
 views = json.load(open(A.dets)); T = json.load(open(A.tracks)); T = T['cars'] if isinstance(T, dict) else T
 
 def pose(tr, t):
-    ts = tr['t']
-    if t < ts[0] or t > ts[-1]: return None
-    return np.interp(t, ts, tr['x']), np.interp(t, ts, tr['z']), np.interp(t, ts, np.unwrap(tr['yaw']))
+    """where the page draws the vehicle at drive time t (index.html trackPose): coasted along its end velocity before and
+    after the track, for tr['ext'] seconds (default 4 s; parked vehicles stay)"""
+    ts = tr['t']; n = len(ts)
+    EB, EF = tr['ext'] if tr.get('ext') else ((1e9, 1e9) if tr['static'] else (4, 4))
+    if t < ts[0] - EB or t > ts[-1] + EF: return None
+    ext = t - ts[0] if t < ts[0] else t - ts[-1] if t > ts[-1] else 0
+    if ext == 0 or tr['static'] or n < 2: tc = min(max(t, ts[0]), ts[-1]); return np.interp(tc, ts, tr['x']), np.interp(tc, ts, tr['z']), np.interp(tc, ts, np.unwrap(tr['yaw']))
+    k = min(6, n - 1); j0 = 0 if ext < 0 else n - 1 - k; dtk = ts[1] - ts[0]
+    vx = (tr['x'][j0 + k] - tr['x'][j0]) / (k * dtk); vz = (tr['z'][j0 + k] - tr['z'][j0]) / (k * dtk); j = 0 if ext < 0 else n - 1
+    return tr['x'][j] + vx * ext, tr['z'][j] + vz * ext, tr['yaw'][j]
 
 def project(e, tr, p):
     K = np.array(e['K']); w2c = np.array(e['w2c']); x, z, yaw = p

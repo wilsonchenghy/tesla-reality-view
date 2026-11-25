@@ -376,7 +376,7 @@ function buildVehicle(tr) {
 function trackPose(tr, td) {
   // a vehicle exists before the tracker locks on and after it lets go: coast it along its own heading and speed for up
   // to 4 s each way (so it drives in, never pops in); visibility then fades with distance from the camera only
-  const T = tr.t, n = T.length, EB = tr.static ? 1e9 : (tr.ext ? tr.ext[0] : 4), EF = tr.static ? 1e9 : (tr.ext ? tr.ext[1] : 4);
+  const T = tr.t, n = T.length, EB = tr.ext ? tr.ext[0] : tr.static ? 1e9 : 4, EF = tr.ext ? tr.ext[1] : tr.static ? 1e9 : 4;   // traffic3d tracks carry their own (short) coast
   if (td < T[0] - EB || td > T[n - 1] + EF) return null;
   const q = clamp((td - T[0]) / (T[1] - T[0]), 0, n - 1.001), i = Math.floor(q), f = q - i;
   const dtk = T[1] - T[0], ext = td < T[0] ? td - T[0] : td > T[n - 1] ? td - T[n - 1] : 0;

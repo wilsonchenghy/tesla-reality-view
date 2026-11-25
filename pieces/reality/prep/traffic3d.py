@@ -226,6 +226,50 @@ def overlap(P, Q):
             if a.max() < b.min() or b.max() < a.min(): return False
     return True
 
+def stitch(out):
+    """one moving vehicle is often several track pieces (camera hand-offs, range noise far away). Join two moving pieces
+    going the same way when one continues the other (gap < 1.5 s, or overlapping in time) and they agree on position:
+    within 2 m across the road and a range-dependent distance along it. Joined pieces are averaged where they overlap and
+    interpolated across a gap."""
+    def at(tr, t): return np.interp(t, tr['t'], tr['x']), np.interp(t, tr['t'], tr['z'])
+    def vel(tr, end):
+        k = min(6, len(tr['t']) - 1); i0 = len(tr['t']) - 1 - k if end else 0
+        dt_ = max(tr['t'][i0 + k] - tr['t'][i0], 1e-3); return (tr['x'][i0 + k] - tr['x'][i0]) / dt_, (tr['z'][i0 + k] - tr['z'][i0]) / dt_
+    merged = True; n0 = len(out)
+    while merged:
+        merged = False; mv = [i for i, o in enumerate(out) if not o['static']]
+        for a_ in mv:
+            for b_ in mv:
+                a, b = out[a_], out[b_]
+                if a_ == b_ or b['t'][0] < a['t'][0]: continue
+                va, vb = vel(a, True), vel(b, False)
+                if va[0] * vb[0] + va[1] * vb[1] <= 0: continue                     # opposite directions
+                gap = b['t'][0] - a['t'][-1]
+                if gap > 1.5: continue
+                if gap > 0: pa = (a['x'][-1] + va[0] * gap, a['z'][-1] + va[1] * gap); pb = (b['x'][0], b['z'][0]); r = b['minr']
+                else:
+                    tm = (b['t'][0] + min(a['t'][-1], b['t'][-1])) / 2; pa, pb = at(a, tm), at(b, tm); r = max(a['minr'], b['minr'])
+                yaw = ego_heading(b['t'][0]); dx, dz = pb[0] - pa[0], pb[1] - pa[1]
+                lat = abs(dx * math.cos(yaw) + dz * math.sin(yaw)); lon = abs(-dx * math.sin(yaw) + dz * math.cos(yaw))
+                if lat > 2.0 or lon > max(5.0, 0.15 * r): continue
+                T = np.round(np.arange(a['t'][0], max(a['t'][-1], b['t'][-1]) + 1e-6, dt), 4)
+                X, Z, Y = [], [], []
+                for t in T:
+                    ps = [(at(o, t), np.interp(t, o['t'], np.unwrap(o['yaw'])), o['n']) for o in (a, b) if o['t'][0] <= t <= o['t'][-1]]
+                    if ps:
+                        w = np.array([p[2] for p in ps], float); w /= w.sum()
+                        X.append(sum(wi * p[0][0] for wi, p in zip(w, ps))); Z.append(sum(wi * p[0][1] for wi, p in zip(w, ps))); Y.append(ps[int(np.argmax(w))][1])
+                    else: X.append(np.nan); Z.append(np.nan); Y.append(np.nan)
+                X, Z, Y = (np.array(v) for v in (X, Z, Y)); ok = ~np.isnan(X)
+                for v in (X, Z, Y): v[~ok] = np.interp(T[~ok], T[ok], v[ok])
+                big = a if a['n'] >= b['n'] else b
+                c = dict(big); c.update(t=[float(v) for v in T], x=[round(float(v), 3) for v in X], z=[round(float(v), 3) for v in Z],
+                                        yaw=[round(float(v), 4) for v in Y], n=a['n'] + b['n'], minr=min(a['minr'], b['minr']),
+                                        hidden=a['hidden'] or b['hidden'], _members=a['_members'] + b['_members'])
+                out = [o for k, o in enumerate(out) if k not in (a_, b_)] + [c]; merged = True; break
+            if merged: break
+    return out, n0 - len(out)
+
 def resolve_overlaps(out):
     """vehicles cannot interpenetrate: a pair that overlaps for most of its shared time is one vehicle twice (or a bad
     fragment); keep the better supported one"""
@@ -324,8 +368,10 @@ for tid, tr in enumerate(done):
     out.append(dict(id=tid, cls=cls, static=static, model=model, aspect=round(asp, 2), color=col, speed=round(float(np.median(sp)), 2),
                     t=[round(float(v), 4) for v in ts], x=[round(float(v), 3) for v in X[:, 0]], z=[round(float(v), 3) for v in X[:, 1]],
                     yaw=[round(float(v), 4) for v in yaw], len=Lm, wid=Wm, hgt=Hm_, n=tr['hits'], minr=round(min(f['r'] for _, f in obs), 1),
-                    hidden=bool(hidden), onroad=onroad, brms=None if brms is None else round(brms, 2),
+                    hidden=bool(hidden), onroad=onroad, ext=[0.3, 0.3],   # a short fade only: a long coast turns every track fragment into another car
+                     brms=None if brms is None else round(brms, 2),
                     _members=[(m['vi'], KT[k], m['box']) for k, f in obs for m in f['members']]))
+out, ns = stitch(out); print('joined track pieces', ns)
 out, nd = resolve_overlaps(out); print('dropped overlapping', nd)
 out, nv = verify(out); print('dropped phantom (moving tracks that do not line up with their own detections)', nv)
 for tr in out: tr.pop('_members', None)

@@ -104,6 +104,6 @@ Debug views: `rv stills reality --t 6 --query nosplat|plate|platecars|dbgcam|pro
 
 - `pieces/reality/index.html`: the piece (Gaussian splat renderer, CAD vehicles, path, HUD, plate and debug modes).
 - `pieces/reality/prep/`: the whole pipeline (README there). `rig.json` is the lane-line calibration.
-- `pieces/reality/cad/` + `models/`: the CAD vehicle programs (build123d, written for a separate CAD harness) and their GLBs.
+- `pieces/reality/cad/` + `models/`: the CAD vehicle programs (build123d, made with the Prometheus CAD harness) and their GLBs.
 - `pieces/reality/BRIEF.md`: the creative brief (layout, palette, timing).
 - `docs/`: the motion harness (workflow, review, recipes; `recipes.md` has the reconstruction notes).
