@@ -93,6 +93,7 @@ render_path(f'{A.out}/plates0')
 # ---- 3. Difix
 def difix_folder(src, dst):
     """Difix across every GPU in parallel (one worker process per GPU, frames interleaved)."""
+    torch.cuda.empty_cache()   # the workers need the memory this process cached while rendering
     import subprocess
     n = torch.cuda.device_count(); os.makedirs(dst, exist_ok=True)
     procs = [subprocess.Popen([sys.executable, '-u', f'{A.data}/difix_worker.py', src, dst, f'{A.data}/ref', str(i), str(n)],
@@ -106,28 +107,29 @@ difix_folder(f'{A.out}/plates0', f'{A.out}/clean0')
 meta = json.load(open(f'{A.data}/{A.cams}')); IM = meta['images']
 s_ = A.real_scale; w0, h0 = IM[0]['width'], IM[0]['height']; TW, TH = int(w0 * s_), int(h0 * s_)
 ld = lambda p, sz: torch.from_numpy(np.asarray(Image.open(p).convert('RGB').resize(sz, Image.BILINEAR)).copy())
-RG = torch.stack([ld(f"{A.data}/{e['file']}", (TW, TH)) for e in IM]).to(dev)
-RM = torch.stack([torch.from_numpy(np.asarray(Image.open(f"{A.data}/{e['mask']}").convert('L').resize((TW, TH), Image.NEAREST)) > 127) for e in IM]).to(dev)
+RG = torch.stack([ld(f"{A.data}/{e['file']}", (TW, TH)) for e in IM]).pin_memory()   # host memory (16 GB cards), one view copied per step
+RM = torch.stack([torch.from_numpy(np.asarray(Image.open(f"{A.data}/{e['mask']}").convert('L').resize((TW, TH), Image.NEAREST)) > 127) for e in IM]).pin_memory()
 RK = torch.tensor([e['K'] for e in IM], device=dev, dtype=torch.float32); RK[:, :2] *= s_
 RV = torch.tensor([e['w2c'] for e in IM], device=dev, dtype=torch.float32)
 cs = 0.5; CV = [chase_mats(c, cs) for c in CC]
-CG = torch.stack([ld(f"{A.out}/clean0/{i + 1:04d}.jpg", (CV[0][2], CV[0][3])) for i in range(len(CC))]).to(dev)
+CG = torch.stack([ld(f"{A.out}/clean0/{i + 1:04d}.jpg", (CV[0][2], CV[0][3])) for i in range(len(CC))]).pin_memory()
 log('training data: real', len(IM), 'chase', len(CC))
 lrs = {'means': 2e-5, 'scales': 2e-3, 'quats': 5e-4, 'opacities': 1e-2, 'sh0': 1.5e-3, 'shN': 1e-4}
 opt = torch.optim.Adam([{'params': [params[k]], 'lr': lrs[k]} for k in params], eps=1e-15)
 for step in range(A.iters):
     if np.random.rand() < 0.35:
         i = np.random.randint(len(CC)); V, K, W, H = CV[i]
-        img, _ = render(V, K, W, H); gt = CG[i].float() / 255
+        img, _ = render(V, K, W, H); gt = CG[i].to(dev, non_blocking=True).float() / 255
         loss = A.chase_w * (img - gt).abs().mean()
     else:
         i = np.random.randint(len(IM)); img, _ = render(RV[i], RK[i], TW, TH)
-        gt = RG[i].float() / 255; m = RM[i].float()
+        gt = RG[i].to(dev, non_blocking=True).float() / 255; m = RM[i].to(dev, non_blocking=True).float()
         loss = ((img - gt).abs().mean(-1) * m).sum() / m.sum().clamp(min=1)
     opt.zero_grad(set_to_none=True); loss.backward(); opt.step()
     if step % 1000 == 0: log('step', step, 'loss', round(loss.item(), 4))
 
 torch.save({k: v.detach().cpu() for k, v in params.items()}, f'{A.out}/params.pt'); log('checkpoint saved')
+del opt; torch.cuda.empty_cache()   # free the optimiser state before the Difix workers need the GPU
 # ---- 5. final render, light Difix, deflicker
 render_path(f'{A.out}/plates1')
 difix_folder(f'{A.out}/plates1', f'{A.out}/clean1')

@@ -51,14 +51,14 @@ def load(i):
 log('loading', len(IM), 'images at', TW, 'x', TH)
 t0 = time.time()
 GT = [load(i) for i in range(len(IM))]
-GT_img = torch.stack([g[0] for g in GT]).to(dev); GT_mask = torch.stack([g[1] for g in GT]).to(dev)   # uint8 / bool on the GPU
+GT_img = torch.stack([g[0] for g in GT]).pin_memory(); GT_mask = torch.stack([g[1] for g in GT]).pin_memory()   # uint8 / bool in pinned host memory (16 GB cards); one view is copied per step
 del GT
 log('loaded in', round(time.time() - t0, 1), 's')
 Ks = torch.tensor([e['K'] for e in IM], dtype=torch.float32, device=dev); Ks[:, :2] *= A.scale
 # inverse-depth targets (half res) when packaged: [inv, conf]
 DEP = None
 if A.depth_w > 0 and IM[0].get('depth'):
-    DEP = torch.stack([torch.from_numpy(np.load(f"{A.data}/{e['depth']}").astype(np.float16)) if e.get('depth') else torch.zeros(2, h0 // 2, w0 // 2, dtype=torch.float16) for e in IM]).to(dev)
+    DEP = torch.stack([torch.from_numpy(np.load(f"{A.data}/{e['depth']}").astype(np.float16)) if e.get('depth') else torch.zeros(2, h0 // 2, w0 // 2, dtype=torch.float16) for e in IM]).pin_memory()
     log('depth targets', tuple(DEP.shape))
 VM = torch.tensor([e['w2c'] for e in IM], dtype=torch.float32, device=dev)
 CAMID = torch.tensor([e['cam_id'] for e in IM], device=dev)
@@ -157,12 +157,12 @@ for step in range(A.iters):
     sh_deg = min(A.sh, step // 1000)
     img, info, dep = render(i, sh_deg)
     pred = apply_app(img, i)
-    gt, m = GT_img[i].float() / 255, GT_mask[i].float()
+    gt, m = GT_img[i].to(dev, non_blocking=True).float() / 255, GT_mask[i].to(dev, non_blocking=True).float()
     l1 = ((pred - gt).abs().mean(-1) * m).sum() / m.sum().clamp(min=1)
     s = ssim(pred.permute(2, 0, 1)[None], gt.permute(2, 0, 1)[None], m[None])
     loss = 0.8 * l1 + 0.2 * (1 - s) + 1e-3 * app.pow(2).mean()
     if DEP is not None:
-        tgt = DEP[i].float(); dh, dw = tgt.shape[1:]
+        tgt = DEP[i].to(dev, non_blocking=True).float(); dh, dw = tgt.shape[1:]
         d_small = F.interpolate(dep[None, None], size=(dh, dw), mode='bilinear', align_corners=False)[0, 0]
         inv_pred = 1 / d_small.clamp(min=0.3)
         w = tgt[1] * (tgt[0] > 0)
@@ -198,7 +198,7 @@ for step in range(A.iters):
 with torch.no_grad():
     ps = []
     for j, i in enumerate(sorted(held)):
-        img, _, _ = render(i, A.sh); gt, m = GT_img[i].float() / 255, GT_mask[i].float()
+        img, _, _ = render(i, A.sh); gt, m = GT_img[i].to(dev).float() / 255, GT_mask[i].to(dev).float()
         mse = (((img - gt) ** 2).mean(-1) * m).sum() / m.sum(); ps.append(float(-10 * torch.log10(mse)))
         if j < 12:
             both = torch.cat([img, gt], 1).clamp(0, 1).mul(255).byte().cpu().numpy()

@@ -18,11 +18,13 @@ flowchart TD
   B --> D["gs_package.py<br/>pinhole images · masks (sky, own car, vehicles) · depth targets"]
   C --> D
   D --> E["Camera solve (CPU job)<br/>sfm.py → sfm_rig.py → sfm_rig2.py → level.py<br/>rig-constrained COLMAP, metric, levelled"]
-  E --> F["gs_train.py (GPU)<br/>3D Gaussian splatting world"]
+  E --> M["motion_masks.py · track_masks.py (GPU)<br/>hide only moving vehicles: flow test, then 3D tracks"]
+  M --> F["gs_train.py (GPU)<br/>3D Gaussian splatting world"]
   E --> G["road_init.py / roadsplat_gpu.py (GPU)<br/>sharp road layer from nearest views"]
   F --> H["refine_job.py (GPU)<br/>render chase path → Difix3D+ → fine-tune world → render → Difix → deflicker"]
   G --> H
-  C --> I["Traffic clean-up<br/>sfm_align · car_colors · dedupe · regularize · sanity"]
+  E --> I["detect_pinhole.py · traffic3d.py<br/>multi-camera Kalman tracks · parked vs moving · no overlaps"]
+  I --> M
   H --> J["pieces/reality/index.html<br/>enhanced frames + CAD vehicles + path + HUD"]
   I --> J
   J --> K["rv render → reality.mp4"]
@@ -32,6 +34,7 @@ flowchart TD
 npm install                                   # three.js for the piece
 node bin/rv.mjs help                       # harness commands
 node bin/rv.mjs render reality             # needs the prepared data in out/reality-data (see HANDOFF.md)
+pieces/reality/prep/jobs/local_clip_cpu.sh clip_04 270 && pieces/reality/prep/jobs/local_clip_gpu.sh clip_04 270   # any clip, one GPU
 ```
 
 The harness itself (deterministic frame rendering, motion blur, review tools) is documented in `docs/`

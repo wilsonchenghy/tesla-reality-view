@@ -27,7 +27,7 @@ if not os.path.exists(db):
         es = [e for e in IM if e['cam'] == cam]; K = es[0]['K']
         ro = pycolmap.ImageReaderOptions(); ro.camera_model = 'PINHOLE'
         ro.camera_params = f"{K[0][0]},{K[1][1]},{K[0][2]},{K[1][2]}"; ro.mask_path = f'{W}/mask'
-        eo = pycolmap.FeatureExtractionOptions(); eo.sift.max_num_features = 4096; eo.num_threads = 4
+        eo = pycolmap.FeatureExtractionOptions(); eo.sift.max_num_features = 4096; eo.num_threads = int(os.environ.get("SFM_THREADS", 4))
         pycolmap.extract_features(db, f'{W}/img', image_names=[f"{cam}/{os.path.basename(e['file'])}" for e in es],
                                   camera_mode=pycolmap.CameraMode.SINGLE, reader_options=ro, extraction_options=eo)
         print('features', cam, flush=True)
@@ -50,7 +50,7 @@ open(f'{W}/pairs.txt', 'w').write('\n'.join(f'{a} {b}' for a, b in sorted(pairs)
 print('pairs', len(pairs), flush=True)
 if not os.path.exists(f'{W}/matched'):
     po = pycolmap.ImportedPairingOptions(); po.match_list_path = f'{W}/pairs.txt'
-    mo = pycolmap.FeatureMatchingOptions(); mo.num_threads = 4
+    mo = pycolmap.FeatureMatchingOptions(); mo.num_threads = int(os.environ.get("SFM_THREADS", 4))
     pycolmap.match_image_pairs(db, matching_options=mo, pairing_options=po)
     open(f'{W}/matched', 'w').write('ok')
     print('matched', flush=True)

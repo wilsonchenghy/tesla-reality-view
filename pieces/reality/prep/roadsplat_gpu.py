@@ -35,8 +35,8 @@ for e in M:
     Vv = np.concatenate([vs * 2 + 0.5, vs * 2 + 0.5, vs * 2 + 1.5, vs * 2 + 1.5]).astype(np.float32)
     c = img[np.clip(Vv.astype(int), 0, H - 1), np.clip(U.astype(int), 0, W - 1)]
     K = np.array(e['K']); c2w = C2W[e['i']]
-    V.append(dict(i=e['i'], cam=e['cam'], kf=e['kf'], U=torch.tensor(U, device=dev), V=torch.tensor(Vv, device=dev),
-                  c=torch.tensor(c, device=dev, dtype=torch.float32), K=K, R=torch.tensor(c2w[:3, :3], device=dev, dtype=torch.float32),
+    V.append(dict(i=e['i'], cam=e['cam'], kf=e['kf'], U=torch.tensor(U).pin_memory(), V=torch.tensor(Vv).pin_memory(),   # host memory (16 GB cards), copied per view
+                  c=torch.tensor(c, dtype=torch.float32).pin_memory(), K=K, R=torch.tensor(c2w[:3, :3], device=dev, dtype=torch.float32),
                   o=torch.tensor(c2w[:3, 3], device=dev, dtype=torch.float32), gy=float(GRD.get(str(e['kf']), 0.0))))
 print('views', len(V), f'loaded in {time.time() - t0:.0f}s', flush=True)
 CORR = {v['i']: torch.eye(3, device=dev) for v in V}       # per-view 2D (x, z) correction, homogeneous
@@ -46,15 +46,15 @@ SW, SHh = 181, 118
 
 def cast(v, near=None):
     K = v['K']
-    ray = torch.stack([(v['U'] - K[0, 2]) / K[0, 0], (v['V'] - K[1, 2]) / K[1, 1], torch.ones_like(v['U'])], 1) @ v['R'].T
+    ray = torch.stack([(v['U'].to(dev, non_blocking=True) - K[0, 2]) / K[0, 0], (v['V'].to(dev, non_blocking=True) - K[1, 2]) / K[1, 1], torch.ones_like(v['U'].to(dev, non_blocking=True))], 1) @ v['R'].T
     t = (v['gy'] - v['o'][1]) / torch.where(ray[:, 1] > -1e-6, torch.full_like(ray[:, 1], -1e-6), ray[:, 1])
     rr = t * ray.norm(dim=1)
     ok = (t > 0) & (rr < (near or A.maxr))
     P = v['o'] + ray[ok] * t[ok, None]
     xz = torch.stack([P[:, 0], P[:, 2], torch.ones_like(P[:, 0])], 1) @ CORR[v['i']].T
-    c = v['c'][ok] * GAIN[v['i']]
+    c = v['c'].to(dev, non_blocking=True)[ok] * GAIN[v['i']]
     if v['cam'] in SH:
-        m = SH[v['cam']]; bi = (v['V'][ok] / 8).long().clamp(0, SHh - 1) * SW + (v['U'][ok] / 8).long().clamp(0, SW - 1)
+        m = SH[v['cam']]; bi = (v['V'].to(dev, non_blocking=True)[ok] / 8).long().clamp(0, SHh - 1) * SW + (v['U'].to(dev, non_blocking=True)[ok] / 8).long().clamp(0, SW - 1)
         c = c * m[bi]
     return xz[:, :2], c, rr[ok], P[:, 1]
 
@@ -112,7 +112,7 @@ for _ in range(2):
     accs = {}
     for v in V:
         K = v['K']
-        ray = torch.stack([(v['U'] - K[0, 2]) / K[0, 0], (v['V'] - K[1, 2]) / K[1, 1], torch.ones_like(v['U'])], 1) @ v['R'].T
+        ray = torch.stack([(v['U'].to(dev, non_blocking=True) - K[0, 2]) / K[0, 0], (v['V'].to(dev, non_blocking=True) - K[1, 2]) / K[1, 1], torch.ones_like(v['U'].to(dev, non_blocking=True))], 1) @ v['R'].T
         xz, c, rr, _ = cast(v)
         t = (v['gy'] - v['o'][1]) / torch.where(ray[:, 1] > -1e-6, torch.full_like(ray[:, 1], -1e-6), ray[:, 1])
         ok = (t > 0) & ((t * ray.norm(dim=1)) < A.maxr)
@@ -120,7 +120,7 @@ for _ in range(2):
         inb = (gx >= 0) & (gx < GW) & (gz >= 0) & (gz < GH)
         idx = gz[inb] * GW + gx[inb]
         lr = torch.log(col[idx].clamp(min=4) / c[inb].clamp(min=4))
-        bi = (v['V'][ok][inb] / 8).long().clamp(0, SHh - 1) * SW + (v['U'][ok][inb] / 8).long().clamp(0, SW - 1)
+        bi = (v['V'].to(dev, non_blocking=True)[ok][inb] / 8).long().clamp(0, SHh - 1) * SW + (v['U'].to(dev, non_blocking=True)[ok][inb] / 8).long().clamp(0, SW - 1)
         a = accs.setdefault(v['cam'], torch.zeros(SW * SHh, 4, device=dev))
         a.index_add_(0, bi, torch.cat([lr, torch.ones_like(lr[:, :1])], 1))
     for cam, a in accs.items():

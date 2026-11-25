@@ -12,6 +12,14 @@ Files:
   lateral offset is unknown are fitted too; the front camera was set from the vanishing point plus a 3.5 m lane.
   `overlay.py` draws the predicted lane lines over all six images; `bev.py` makes a bird's-eye check.
 - `prep.py`: trajectory (speed + heading at 36 Hz) → frames → depth → metric scale against the ground plane → splats.
+- `motion_masks.py`: parked vs moving per vehicle instance from optical flow (vehicle vs the ground under it); training
+  masks that hide only moving vehicles, or (`--frames --inpaint`) Difix references with only moving cars removed.
+- `detect_pinhole.py`: YOLO11-seg on every solved view (box, ground contact, paint colour), cached for tracking.
+- `traffic3d.py`: multi-camera traffic in the solved world (ground lift + height cue + box fit, Kalman + Hungarian + RTS,
+  bearing triangulation for parked vs moving, road prior, no overlaps); `proj_eval.py` scores tracks against detections.
+- `force_moving.py`, `track_masks.py`: make the training masks agree with the tracks (moving hidden, parked visible).
+- `make_refs.py`: the real front frame at every output frame (Difix references); `refine_finish.py` resumes a refine.
+- `jobs/local_*.sh`: the whole chain for any clip on one 16 GB GPU (see HANDOFF.md).
 - `preview.py`: quick numpy point preview of one keyframe from a chase camera.
 
 Splat record (20 bytes): f32 x,y,z | u8 r,g,b | u8 kind (bit0 road, bits1-3 camera, bits4-7 road elongation e=1.25^n) |

@@ -663,7 +663,7 @@ piece({
     ui.sub.textContent = `t ${fmt(td)}  ·  seq ${Math.round(td * 36)}  ·  kf ${String(Math.max(0, ki)).padStart(3, '0')}`;
     ui.time.textContent = `${fmt(ft)} / ${fmt(T)}`;
     set(ui.bar, { width: Math.round(200 * ft / T) });
-    ui.count.textContent = `${n.toLocaleString('en-US')} GAUSSIANS`;
+    ui.count.textContent = `${(useEnh ? KF.reduce((a, k) => a + (k.n || 0), 0) : n).toLocaleString('en-US')} GAUSSIANS`;   // the world the plate was rendered from
     ui.tel.textContent = `speed   ${F.v.toFixed(2).padStart(6)} m/s   steer ${F.steer.toFixed(1).padStart(6)}°\nheading ${(F.yaw * 180 / Math.PI).toFixed(1).padStart(6)}°     state ${F.ap}\nblinker ${F.bl ? 'L' : '·'} ${F.br ? 'R' : '·'}            frame ${String(Math.round(F.t * 36)).padStart(5)}`;
     // camera feeds (frame-exact jpgs extracted at 30 fps)
     await Promise.all(ui.tiles.map(async (tl) => {
