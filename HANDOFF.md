@@ -32,6 +32,9 @@ Scene: clip_00, drive time 6–26 s (a left turn through an intersection, then 4
 
 Everything runs on one 16 GB desktop GPU (RTX 5070 Ti): world 25 min, road 10 min, clean-up 35 min, traffic + piece 10 min.
 
+Other clips: **clip_04** (drive time 270–290 s, a different town) runs through the same jobs with no tuning: held-out
+PSNR **22.93**, 92 traffic tracks. Demo: `out/reality/reality.mp4` after `local_clip_gpu.sh clip_04 270`.
+
 ## The open problems, in priority order
 
 1. **Traffic precision.** Recall is good; precision is held back by duplicate fragments in dense parking rows and by

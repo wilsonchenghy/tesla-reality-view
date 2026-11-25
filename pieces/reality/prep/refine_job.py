@@ -132,6 +132,12 @@ torch.save({k: v.detach().cpu() for k, v in params.items()}, f'{A.out}/params.pt
 del opt; torch.cuda.empty_cache()   # free the optimiser state before the Difix workers need the GPU
 # ---- 5. final render, light Difix, deflicker
 render_path(f'{A.out}/plates1')
+# the Difix worker needs nearly the whole card: keep only a CPU copy of the world and free everything on the GPU
+import gc
+params = {k: v.detach().cpu() for k, v in params.items()}
+for _name in [k for k, v in list(globals().items()) if (torch.is_tensor(v) and v.is_cuda) or k in ('CV', 'scene')]:
+    globals().pop(_name, None)
+gc.collect(); torch.cuda.empty_cache()
 difix_folder(f'{A.out}/plates1', f'{A.out}/clean1')
 import subprocess
 subprocess.run([sys.executable, '-u', f'{A.data}/deflicker_gpu.py', f'{A.out}/plates1', f'{A.out}/clean1', f'{A.out}/frames'], check=True)
