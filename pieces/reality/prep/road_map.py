@@ -1,19 +1,34 @@
 """Where is the road? Segment every solved pinhole view (SegFormer, Cityscapes classes), cast its road and not-road pixels
 onto the ground plane (y = 0) through the solved camera pose, and vote them into a top-down grid. traffic3d.py uses the
 grid to keep vehicles on the road.
-usage: road_map.py --cams cameras_rig3.json --out road_map.npz [--res 0.5] [--maxr 50]"""
+With --chase chase_cams.json --frames DIR it segments the rendered chase views instead: the road where the trained world
+shows it, which is what a viewer of the piece sees.
+usage: road_map.py --cams cameras_rig3.json --out road_map.npz [--res 0.5] [--maxr 50]
+       road_map.py --chase chase_cams.json --frames refine/frames --out road_map.npz"""
 import argparse, json, os
 import numpy as np, torch
 from PIL import Image
 from transformers import SegformerForSemanticSegmentation, SegformerImageProcessor
 
-ap = argparse.ArgumentParser(); ap.add_argument('--cams', required=True); ap.add_argument('--out', required=True)
+ap = argparse.ArgumentParser(); ap.add_argument('--cams'); ap.add_argument('--chase'); ap.add_argument('--frames'); ap.add_argument('--out', required=True)
 ap.add_argument('--res', type=float, default=0.5); ap.add_argument('--maxr', type=float, default=50.0)
 ap.add_argument('--model', default='nvidia/segformer-b2-finetuned-cityscapes-1024-1024')
 A = ap.parse_args()
-C = json.load(open(A.cams)); root = os.path.dirname(os.path.abspath(A.cams))
+if A.chase:
+    import math
+    def chase_view(i, c):
+        """three.js chase camera (y up, looking down -z, vertical fov) -> pinhole K and world-to-camera (OpenCV)"""
+        x, y, z, w = c['q']
+        R = np.array([[1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+                      [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+                      [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)]]) @ np.diag([1, -1, -1])
+        f = c['h'] / 2 / math.tan(math.radians(c['fov']) / 2); w2c = np.eye(4); w2c[:3, :3] = R.T; w2c[:3, 3] = -R.T @ np.array(c['p'])
+        return dict(file=os.path.abspath(f"{A.frames}/{i + 1:04d}.jpg"), K=[[f, 0, c['w'] / 2], [0, f, c['h'] / 2], [0, 0, 1]], w2c=w2c.tolist())
+    C = dict(images=[chase_view(i, c) for i, c in enumerate(json.load(open(A.chase)))]); root = '/'
+elif A.cams: C = json.load(open(A.cams)); root = os.path.dirname(os.path.abspath(A.cams))
+else: raise SystemExit('give --cams or --chase with --frames')
 proc = SegformerImageProcessor.from_pretrained(A.model); net = SegformerForSemanticSegmentation.from_pretrained(A.model).cuda().eval().half()
-ROAD, NOT = [0], [1, 2, 3, 4, 8, 9]          # road | sidewalk, building, wall, fence, vegetation, terrain (cars and the rest abstain)
+ROAD, NOT = [0], [1, 9]   # road | sidewalk, terrain. Only ground classes vote: a tree or wall seen in front of the road would cast its 'not road' onto the road behind it
 pts, votes = [], []
 for n, e in enumerate(C['images']):
     im = Image.open(os.path.join(root, e['file'])).convert('RGB'); W, H = im.size

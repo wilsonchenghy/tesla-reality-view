@@ -16,7 +16,7 @@ from scipy.optimize import linear_sum_assignment
 ap = argparse.ArgumentParser()
 ap.add_argument('--dets', required=True); ap.add_argument('--cams', required=True); ap.add_argument('--index', required=True)
 ap.add_argument('--out', required=True); ap.add_argument('--maxr', type=float, default=60.0)
-ap.add_argument('--road-map', help='road_map.py grid: slide vehicles along their viewing ray onto the road')
+ap.add_argument('--road-map', nargs='+', help='road_map.py grids, first with an opinion wins (rendered views, then cameras): slide vehicles along their viewing ray onto the road')
 ap.add_argument('--static-masks', help='masks where parked vehicles are visible (motion_masks.py + force_moving.py): flow-based parked/moving per detection')
 A = ap.parse_args()
 SIZE = {'car': (4.7, 1.85, 1.5), 'truck': (6.5, 2.3, 2.6), 'bus': (11.0, 2.55, 3.1), 'moto': (2.1, 0.8, 1.4)}
@@ -193,12 +193,15 @@ def motion_test(obs):
 
 RM = None
 if A.road_map:
-    _m = np.load(A.road_map); RM = dict(o=_m['origin'], r=float(_m['res']), p=_m['road'] / np.maximum(_m['total'], 1e-6), seen=_m['total'] > 0.5)
+    RM = []
+    for f in A.road_map:
+        _m = np.load(f); RM.append(dict(o=_m['origin'], r=float(_m['res']), p=_m['road'] / np.maximum(_m['total'], 1e-6), seen=_m['total'] > 0.5))
 def road_p(x, z):
-    """road probability at (x, z); None where the cameras never saw the ground (or it was under a vehicle)"""
-    i, j = int((x - RM['o'][0]) / RM['r']), int((z - RM['o'][1]) / RM['r'])
-    if not (0 <= i < RM['p'].shape[0] and 0 <= j < RM['p'].shape[1]) or not RM['seen'][i, j]: return None
-    return RM['p'][i, j]
+    """road probability at (x, z) from the first map that saw the ground there; None where none did"""
+    for m in RM:
+        i, j = int((x - m['o'][0]) / m['r']), int((z - m['o'][1]) / m['r'])
+        if 0 <= i < m['p'].shape[0] and 0 <= j < m['p'].shape[1] and m['seen'][i, j]: return m['p'][i, j]
+    return None
 def onto_road(X, ts):
     """the range to a vehicle is the uncertain part, its bearing is not: slide each smoothed position along the ray from
     our car to the nearest road cell (scale 0.6..1.6 of the range), median-filter the scales over ~0.6 s. Returns the
