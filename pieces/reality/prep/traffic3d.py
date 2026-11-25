@@ -86,7 +86,7 @@ def lift(e, d):
         c = fit[0]; sr = max(0.3, min(sr, 0.06 * r_f + 0.3))
     st = max(0.25, 0.012 * r)                                          # across the ray: well constrained
     Rm = np.outer(hr, hr) * sr ** 2 + np.outer([-hr[1], hr[0]], [-hr[1], hr[0]]) * st ** 2
-    return dict(z=c, R=Rm, r=r_f, cls=d['cls'], col=d['col'], cam=e['cam'], box=d['box'], conf=d['conf'], parked=parked(e, d),
+    return dict(z=c, R=Rm, r=r_f, cls=d['cls'], col=d['col'], cam=e['cam'], box=d['box'], conf=d['conf'], parked=parked(e, d), vi=e['i'],
                 o=np.array([o[0], o[2]]), hr=hr, sr=sr)
 
 meas = {k: [] for k in kfs}
@@ -248,6 +248,29 @@ def resolve_overlaps(out):
             if tot and hits / tot > 0.3: drop.add(j)
     return [o for k, o in enumerate(out) if k not in drop], len(drop)
 
+def verify(out):
+    """self-consistency: project each moving track's 3D box into the views of its own member detections at those moments;
+    a real vehicle lines up with its own evidence (IoU >= 0.3) most of the time, a phantom (range error, duplicate) does not"""
+    keep, nd = [], 0
+    for tr in out:
+        if tr['static'] or not tr.get('_members'): keep.append(tr); continue
+        ok = tot = 0
+        for (vi, t, box) in tr['_members']:
+            e = meta[vi]; K = np.array(e['K']); w2c = np.array(e['w2c'])
+            x, z, y = np.interp(t, tr['t'], tr['x']), np.interp(t, tr['t'], tr['z']), np.interp(t, tr['t'], np.unwrap(tr['yaw']))
+            c, s_ = math.cos(y), math.sin(y); fw = np.array([s_, 0, -c]); rt = np.array([c, 0, s_])
+            P = np.array([[x, 0, z] + fw * a * tr['len'] / 2 + rt * b * tr['wid'] / 2 + np.array([0, h, 0]) for a in (-1, 1) for b in (-1, 1) for h in (0, tr['hgt'])])
+            cc = (w2c[:3, :3] @ P.T + w2c[:3, 3:4]).T
+            if (cc[:, 2] < 0.3).any(): continue
+            uv = (K @ cc.T).T; uv = uv[:, :2] / uv[:, 2:3]
+            b = [max(0, uv[:, 0].min()), max(0, uv[:, 1].min()), min(e['width'], uv[:, 0].max()), min(e['height'], uv[:, 1].max())]
+            ix = max(0, min(b[2], box[2]) - max(b[0], box[0])); iy = max(0, min(b[3], box[3]) - max(b[1], box[1])); i = ix * iy
+            u = (b[2] - b[0]) * (b[3] - b[1]) + (box[2] - box[0]) * (box[3] - box[1]) - i
+            tot += 1; ok += (i / max(u, 1e-6)) >= 0.3
+        if tot and ok / tot < 0.25: nd += 1; continue
+        keep.append(tr)
+    return keep, nd
+
 def ego_heading(t):
     j = np.argmin(np.abs(P_EGO[:, 0] - t)); return P_EGO[j, 3]
 
@@ -267,7 +290,9 @@ for tid, tr in enumerate(done):
     else:
         dchi, vfit = motion_test(tr['obs']); static = bool(vfit < 1.0 or (pf is not None and pf > 0.7))
     hidden = (pf is None) or pf < 0.5                                  # not visible in the trained world: drawn as a model
-    if static and pf is not None and pf >= 0.2: hidden = False        # parked and seen in part of the views: the world has it
+    onroad = bool(static and on_carriageway(X[0, 0], X[0, 1]))      # standing in a lane (queued at a light): traffic, not scenery
+    if static and not onroad and pf is not None and pf >= 0.2: hidden = False   # parked and seen in part of the views: the world has it
+    if onroad: hidden = True
     if static and min(f['r'] for _, f in tr['obs']) > 28: hidden = False   # parked and only seen far away: too uncertain to place (as car_regularize.py)
     if not static and not on_road(X, ts):                              # road prior: traffic drives on the carriageway
         static = True
@@ -299,7 +324,10 @@ for tid, tr in enumerate(done):
     out.append(dict(id=tid, cls=cls, static=static, model=model, aspect=round(asp, 2), color=col, speed=round(float(np.median(sp)), 2),
                     t=[round(float(v), 4) for v in ts], x=[round(float(v), 3) for v in X[:, 0]], z=[round(float(v), 3) for v in X[:, 1]],
                     yaw=[round(float(v), 4) for v in yaw], len=Lm, wid=Wm, hgt=Hm_, n=tr['hits'], minr=round(min(f['r'] for _, f in obs), 1),
-                    hidden=bool(hidden), brms=None if brms is None else round(brms, 2)))
+                    hidden=bool(hidden), onroad=onroad, brms=None if brms is None else round(brms, 2),
+                    _members=[(m['vi'], KT[k], m['box']) for k, f in obs for m in f['members']]))
 out, nd = resolve_overlaps(out); print('dropped overlapping', nd)
+out, nv = verify(out); print('dropped phantom (moving tracks that do not line up with their own detections)', nv)
+for tr in out: tr.pop('_members', None)
 json.dump(out, open(A.out, 'w'))
 print('tracks', len(out), 'moving', sum(not t['static'] for t in out), 'static', sum(t['static'] for t in out))

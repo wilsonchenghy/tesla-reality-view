@@ -43,10 +43,10 @@ for e in meta:
                 q = at(tr, e['t'])
                 if q is None: continue
                 d = math.hypot(c[0] - q[0], c[1] - q[1])
-                if d < gate and not tr['static']: best, bd = tr, 0.0; break   # any moving vehicle in reach: hide (a ghost is worse than a gap)
+                if d < gate and (not tr['static'] or tr.get('onroad')): best, bd = tr, 0.0; break   # traffic in reach (moving, or waiting in a lane): hide; a ghost is worse than a gap
                 if d < min(bd, gate): best, bd = tr, d
             if best is None: st['unmatched'] += 1; continue
-            if best['static']:
+            if best['static'] and not best.get('onroad'):
                 out[m & ~never[e['cam']]] = 255; st['parked'] += 1
             else:
                 mm = cv2.dilate(m.astype(np.uint8), np.ones((9, 9), np.uint8)) > 0
