@@ -16,6 +16,7 @@ from scipy.optimize import linear_sum_assignment
 ap = argparse.ArgumentParser()
 ap.add_argument('--dets', required=True); ap.add_argument('--cams', required=True); ap.add_argument('--index', required=True)
 ap.add_argument('--out', required=True); ap.add_argument('--maxr', type=float, default=60.0)
+ap.add_argument('--road-map', help='road_map.py grid: slide vehicles along their viewing ray onto the road')
 ap.add_argument('--static-masks', help='masks where parked vehicles are visible (motion_masks.py + force_moving.py): flow-based parked/moving per detection')
 A = ap.parse_args()
 SIZE = {'car': (4.7, 1.85, 1.5), 'truck': (6.5, 2.3, 2.6), 'bus': (11.0, 2.55, 3.1), 'moto': (2.1, 0.8, 1.4)}
@@ -190,6 +191,38 @@ def motion_test(obs):
     c1 = sum((z - j @ th) @ w @ (z - j @ th) for j, w, z in zip(J, Wi, Z))
     return float(c0 - c1), float(np.hypot(th[2], th[3]))
 
+RM = None
+if A.road_map:
+    _m = np.load(A.road_map); RM = dict(o=_m['origin'], r=float(_m['res']), p=_m['road'] / np.maximum(_m['total'], 1e-6), seen=_m['total'] > 0.5)
+def road_p(x, z):
+    """road probability at (x, z); None where the cameras never saw the ground (or it was under a vehicle)"""
+    i, j = int((x - RM['o'][0]) / RM['r']), int((z - RM['o'][1]) / RM['r'])
+    if not (0 <= i < RM['p'].shape[0] and 0 <= j < RM['p'].shape[1]) or not RM['seen'][i, j]: return None
+    return RM['p'][i, j]
+def onto_road(X, ts):
+    """the range to a vehicle is the uncertain part, its bearing is not: slide each smoothed position along the ray from
+    our car to the nearest road cell (scale 0.6..1.6 of the range), median-filter the scales over ~0.6 s. Returns the
+    moved states and the share of samples that found road (None without a map)."""
+    if RM is None: return X, None
+    sc, found = [], 0
+    for (x, z, _, _), t in zip(X, ts):
+        j = np.argmin(np.abs(P_EGO[:, 0] - t)); ex, ez = P_EGO[j, 1], P_EGO[j, 2]
+        p0 = road_p(x, z)
+        if p0 is None or p0 >= 0.5: sc.append(1.0); found += 1; continue
+        best = None
+        for f in sorted(np.arange(0.6, 1.601, 0.02), key=lambda f: abs(f - 1)):
+            q = road_p(ex + (x - ex) * f, ez + (z - ez) * f)
+            if q is not None and q >= 0.6: best = f; break
+        sc.append(best if best is not None else 1.0); found += best is not None
+    sc = np.array(sc); h = 5
+    sm = np.array([np.median(sc[max(0, i - h):i + h + 1]) for i in range(len(sc))])
+    Y = X.copy()
+    for i, t in enumerate(ts):
+        j = np.argmin(np.abs(P_EGO[:, 0] - t)); ex, ez = P_EGO[j, 1], P_EGO[j, 2]
+        Y[i, 0] = ex + (X[i, 0] - ex) * sm[i]; Y[i, 1] = ez + (X[i, 1] - ez) * sm[i]
+    if len(ts) > 2: Y[:, 2] = np.gradient(Y[:, 0], ts); Y[:, 3] = np.gradient(Y[:, 1], ts)
+    return Y, found / len(ts)
+
 def on_road(X, ts):
     """moving traffic must sit on the carriageways (lateral offset from our path -30..+12 m, as cars.py) and, away from the
     intersection we turn through, travel along the road (either direction)"""
@@ -324,6 +357,8 @@ for tid, tr in enumerate(done):
     H_ = [h for h in tr['hist']]
     last = max(i for i, h in enumerate(H_) if h[3]); H_ = H_[:last + 1]     # drop the coasting tail
     X = rts(H_); ts = np.array([KT[h[0]] for h in H_])
+    X, road_ok = onto_road(X, ts)
+    if road_ok is not None and road_ok < 0.5: continue                # mostly where no road is: not a vehicle we can place
     sp = np.hypot(X[:, 2], X[:, 3])
     disp = math.hypot(X[-1, 0] - X[0, 0], X[-1, 1] - X[0, 1])
     votes = [m['parked'] for _, f in tr['obs'] for m in f['members'] if m['parked'] is not None]
