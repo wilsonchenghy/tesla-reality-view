@@ -1,0 +1,26 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>__NAME__</title>
+<script type="module">
+// DOM + CSS + SVG: the sharpest text and UI. Every style is computed from t inside render().
+import { piece, el, set, grid, springTrack, ease, tween, clamp } from '../../runtime/rv.js';
+
+const W = 1080, H = 1080, BPM = 120;
+const g = grid({ bpm: BPM });
+const b = g.beat;
+const T = b(16);                     // 4 bars
+let R = {};
+
+piece({
+  width: W, height: H, fps: 60, duration: T, loop: true, bpm: BPM, background: '#EDEBE7', fonts: ['Geist'],
+  setup(stage) {
+    R.title = el('div', { font: '600 96px Geist', letterSpacing: '-0.04em', color: '#111', left: 96, top: 440 }, stage, '__NAME__');
+  },
+  render(t) {
+    const u = tween(t, b(0), 0.8, ease.outExpo) * (1 - tween(t, b(14), 0.4, ease.inExpo));
+    set(R.title, { opacity: u, transform: `translateY(${(1 - u) * 40}px)` });
+  },
+  score(a) { a.kick(b(0) + a.frame); },
+  probe(t) { return {}; },
+});
+</script>

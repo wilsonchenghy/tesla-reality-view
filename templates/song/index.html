@@ -1,0 +1,33 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>__NAME__</title>
+<script type="module">
+// Cut to a supplied song. 1) put the track in this folder as song.wav (or .mp3)
+// 2) node bin/rv.mjs analyze pieces/__NAME__/song.wav   -> song.beats.json (bpm, beats, downbeats)
+// 3) everything below reads that grid: picture events on beats, the song placed sample-accurately.
+import { piece, el, set, grid, burst, frameTime } from '../../runtime/rv.js';
+
+const BEATS = await (await fetch('./song.beats.json')).json();
+const START = BEATS.first_downbeat;                  // where the piece starts in the song (seconds)
+const g = grid({ bpm: BEATS.bpm, offset: 0 });       // piece time 0 = the first downbeat
+const b = g.beat;
+const T = b(16);                                     // 4 bars
+let dot, label;
+
+piece({
+  width: 1080, height: 1080, fps: 60, duration: T, loop: false, bpm: BEATS.bpm, background: '#111',
+  fonts: ['Geist Mono'],
+  setup(stage) {
+    dot = el('div', { left: 440, top: 440, width: 200, height: 200, borderRadius: 100, background: '#F2EFE9' }, stage);
+    label = el('div', { font: '500 28px "Geist Mono"', color: '#888', left: 60, top: 60 }, stage, '');
+  },
+  render(t) {
+    const k = g.pulse(t, 0.14);                       // 1 on each beat, decaying
+    set(dot, { transform: `scale(${(1 + 0.25 * k).toFixed(4)})` });
+    const ft = frameTime();
+    label.textContent = `bar ${Math.floor(g.barAt(ft)) + 1}  beat ${Math.floor(g.beatAt(ft)) % 4 + 1}`;
+  },
+  async score(a) { await a.sample('./song.wav', 0, { from: START, dur: T }); },
+  cues: Array.from({ length: 4 }, (_, i) => [b(i * 4), `bar ${i + 1}`]),
+});
+</script>

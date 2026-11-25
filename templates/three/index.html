@@ -1,0 +1,32 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>__NAME__</title>
+<script type="importmap">{ "imports": { "three": "../../node_modules/three/build/three.module.js", "three/addons/": "../../node_modules/three/examples/jsm/" } }</script>
+<script type="module">
+// three.js (vendored, pinned 0.160.0). preserveDrawingBuffer so the harness can capture each frame.
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { piece, ease, tween, phase } from '../../runtime/rv.js';
+
+const W = 1080, H = 1080, T = 6;
+let renderer, scene, camera, mesh;
+
+piece({
+  width: W, height: H, fps: 60, duration: T, loop: true, background: '#E9E6E0',
+  setup(stage) {
+    renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    renderer.setPixelRatio(stage.dpr); renderer.setSize(W, H);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.outputColorSpace = THREE.SRGBColorSpace;
+    stage.appendChild(renderer.domElement);
+    scene = new THREE.Scene(); scene.background = new THREE.Color('#E9E6E0');
+    scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+    camera = new THREE.PerspectiveCamera(30, W / H, 0.1, 100); camera.position.set(0, 1.2, 6); camera.lookAt(0, 0, 0);
+    mesh = new THREE.Mesh(new THREE.TorusKnotGeometry(0.8, 0.28, 256, 48), new THREE.MeshPhysicalMaterial({ color: '#D97757', roughness: 0.3, clearcoat: 0.6 }));
+    scene.add(mesh);
+  },
+  render(t) {
+    mesh.rotation.y = phase(t, T) * Math.PI * 2;      // one whole turn per loop: seamless
+    renderer.render(scene, camera);
+  },
+});
+</script>

@@ -1,0 +1,43 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>html,body{margin:0;background:#d9dadc}canvas{display:block}</style>
+<script type="importmap">{"imports":{"three":"/home/user/rv/node_modules/three/build/three.module.js","three/addons/":"/home/user/rv/node_modules/three/examples/jsm/"}}</script>
+</head><body><script type="module">
+// preview of one vehicle GLB: ?m=ego&v=rear34|side|front34|top ; window.__report = bbox + part centroids
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+const q = new URLSearchParams(location.search), m = q.get('m') || 'ego', v = q.get('v') || 'rear34';
+const W = +(q.get('w') || 1200), H = +(q.get('h') || 750);
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+r.setSize(W, H); r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap;
+r.toneMapping = THREE.ACESFilmicToneMapping; r.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(r.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0xd9dadc);
+const pm = new THREE.PMREMGenerator(r); scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8c90, 0.6));
+const sun = new THREE.DirectionalLight(0xffffff, 1.6); sun.position.set(-6, 12, 5); sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -6, right: 6, top: 6, bottom: -6 });
+scene.add(sun);
+const g = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), new THREE.ShadowMaterial({ opacity: 0.28 }));
+g.rotation.x = -Math.PI / 2; g.receiveShadow = true; scene.add(g);
+const grid = new THREE.GridHelper(40, 40, 0xb9bbbe, 0xc4c6c9); grid.position.y = 0.001; scene.add(grid);
+new GLTFLoader().load(`../models/${m}.glb`, (gl) => {
+  const o = gl.scene; scene.add(o);
+  const parts = {};
+  o.traverse((c) => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true;
+    const b = new THREE.Box3().setFromObject(c), cc = b.getCenter(new THREE.Vector3());
+    parts[c.name] = { tris: c.geometry.index.count / 3, center: cc.toArray().map((x) => +x.toFixed(3)),
+      color: '#' + c.material.color.getHexString(THREE.SRGBColorSpace) }; } });
+  const bb = new THREE.Box3().setFromObject(o), s = bb.getSize(new THREE.Vector3());
+  const L = Math.max(s.z, 4), cam = new THREE.PerspectiveCamera(v === 'side' ? 20 : 30, W / H, 0.1, 200);
+  const k = L / 4.75;
+  const P = { rear34: [3.6, 3.4, 7.2], side: [14.5, 0.95, 0], front34: [-4.2, 2.2, -6.2], top: [0.01, 16, 0.01],
+              chase: [0, 2.6, 8.5] }[v];
+  cam.position.set(P[0] * k, P[1] * Math.max(1, s.y / 1.62), P[2] * k);
+  const tgt = new THREE.Vector3(0, s.y * (v === 'side' ? 0.5 : 0.42), 0);
+  cam.lookAt(tgt);
+  r.render(scene, cam);
+  window.__report = { model: m, bbox_min: bb.min.toArray(), bbox_max: bb.max.toArray(), size: s.toArray(), parts };
+  window.__done = true;
+}, undefined, (e) => { window.__report = { error: String(e) }; window.__done = true; });
+</script></body></html>

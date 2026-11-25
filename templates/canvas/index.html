@@ -1,0 +1,25 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>__NAME__</title>
+<script type="module">
+// Canvas 2D: generative, illustrative, thousands of shapes. Draw the whole frame from t.
+import { piece, ctx2d, grid, noise, rng, ease, clamp, phase } from '../../runtime/rv.js';
+
+const W = 1080, H = 1080, T = 8;
+const N = noise(1);
+let g;
+
+piece({
+  width: W, height: H, fps: 60, duration: T, loop: true, background: '#0D0D0F',
+  setup(stage) { g = ctx2d(stage.canvas()); },
+  render(t) {
+    g.fillStyle = '#0D0D0F'; g.fillRect(0, 0, W, H);
+    for (let i = 0; i < 24; i++) {
+      const a = (i / 24) * Math.PI * 2 + phase(t, T) * Math.PI * 2;       // one whole turn per loop
+      const r = 300 + 60 * N.loop1(t, T, i * 0.37);                          // loop noise: periodic in T
+      g.fillStyle = '#F2EFE9';
+      g.beginPath(); g.arc(W / 2 + Math.cos(a) * r, H / 2 + Math.sin(a) * r, 8, 0, Math.PI * 2); g.fill();
+    }
+  },
+});
+</script>

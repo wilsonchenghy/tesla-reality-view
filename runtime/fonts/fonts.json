@@ -1,0 +1,82 @@
+{
+  "Geist": [
+    {
+      "file": "Geist-normal-100_900.woff2",
+      "style": "normal",
+      "weight": "100 900"
+    }
+  ],
+  "Geist Mono": [
+    {
+      "file": "GeistMono-normal-100_900.woff2",
+      "style": "normal",
+      "weight": "100 900"
+    }
+  ],
+  "Instrument Serif": [
+    {
+      "file": "InstrumentSerif-italic-400.woff2",
+      "style": "italic",
+      "weight": "400"
+    },
+    {
+      "file": "InstrumentSerif-normal-400.woff2",
+      "style": "normal",
+      "weight": "400"
+    }
+  ],
+  "Fraunces": [
+    {
+      "file": "Fraunces-italic-100_900.woff2",
+      "style": "italic",
+      "weight": "100 900"
+    },
+    {
+      "file": "Fraunces-normal-100_900.woff2",
+      "style": "normal",
+      "weight": "100 900"
+    }
+  ],
+  "Archivo": [
+    {
+      "file": "Archivo-normal-100_900.woff2",
+      "style": "normal",
+      "weight": "100 900",
+      "stretch": "62% 125%"
+    }
+  ],
+  "Bricolage Grotesque": [
+    {
+      "file": "BricolageGrotesque-normal-200_800.woff2",
+      "style": "normal",
+      "weight": "200 800",
+      "stretch": "75% 100%"
+    }
+  ],
+  "Unbounded": [
+    {
+      "file": "Unbounded-normal-200_900.woff2",
+      "style": "normal",
+      "weight": "200 900"
+    }
+  ],
+  "Space Mono": [
+    {
+      "file": "SpaceMono-normal-400.woff2",
+      "style": "normal",
+      "weight": "400"
+    },
+    {
+      "file": "SpaceMono-normal-700.woff2",
+      "style": "normal",
+      "weight": "700"
+    }
+  ],
+  "Big Shoulders Display": [
+    {
+      "file": "BigShouldersDisplay-normal-100_900.woff2",
+      "style": "normal",
+      "weight": "100 900"
+    }
+  ]
+}

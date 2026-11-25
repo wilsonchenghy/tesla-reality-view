@@ -1,0 +1,153 @@
+{
+ "ego": {
+  "glb": "/home/user/rv/pieces/reality/models/ego.glb",
+  "triangles": 30220,
+  "per_part": {
+   "body": 14302,
+   "glass": 4328,
+   "tire": 6048,
+   "rim": 5296,
+   "light_rear": 44,
+   "light_front": 202
+  },
+  "bbox_min": [
+   -0.965,
+   -0.0,
+   -2.368
+  ],
+  "bbox_max": [
+   0.965,
+   1.618,
+   2.368
+  ],
+  "size_xyz": [
+   1.93,
+   1.618,
+   4.736
+  ],
+  "build_s": 21.3,
+  "export_s": 1.3,
+  "kb": 912
+ },
+ "sedan": {
+  "glb": "/home/user/rv/pieces/reality/models/sedan.glb",
+  "triangles": 32687,
+  "per_part": {
+   "body": 14512,
+   "glass": 3065,
+   "tire": 5632,
+   "rim": 9168,
+   "light_rear": 250,
+   "light_front": 60
+  },
+  "bbox_min": [
+   -0.926,
+   0.002,
+   -2.344
+  ],
+  "bbox_max": [
+   0.926,
+   1.449,
+   2.345
+  ],
+  "size_xyz": [
+   1.852,
+   1.447,
+   4.688
+  ],
+  "build_s": 25.3,
+  "export_s": 1.3,
+  "kb": 1055
+ },
+ "suv": {
+  "glb": "/home/user/rv/pieces/reality/models/suv.glb",
+  "triangles": 29943,
+  "per_part": {
+   "body": 13640,
+   "glass": 3582,
+   "tire": 6048,
+   "rim": 6080,
+   "light_rear": 539,
+   "light_front": 54
+  },
+  "bbox_min": [
+   -0.978,
+   -0.0,
+   -2.446
+  ],
+  "bbox_max": [
+   0.978,
+   1.783,
+   2.446
+  ],
+  "size_xyz": [
+   1.956,
+   1.783,
+   4.892
+  ],
+  "build_s": 34.1,
+  "export_s": 1.0,
+  "kb": 918
+ },
+ "pickup": {
+  "glb": "/home/user/rv/pieces/reality/models/pickup.glb",
+  "triangles": 37262,
+  "per_part": {
+   "body": 20708,
+   "glass": 3521,
+   "tire": 6560,
+   "rim": 6048,
+   "light_rear": 377,
+   "light_front": 48
+  },
+  "bbox_min": [
+   -1.001,
+   0.001,
+   -2.897
+  ],
+  "bbox_max": [
+   1.001,
+   1.953,
+   2.9
+  ],
+  "size_xyz": [
+   2.003,
+   1.953,
+   5.797
+  ],
+  "build_s": 14.4,
+  "export_s": 0.9,
+  "kb": 1101
+ },
+ "boxtruck": {
+  "glb": "/home/user/rv/pieces/reality/models/boxtruck.glb",
+  "triangles": 33441,
+  "per_part": {
+   "body": 11764,
+   "glass": 4129,
+   "tire": 8848,
+   "rim": 7744,
+   "light_rear": 24,
+   "light_front": 48,
+   "cargo": 884
+  },
+  "bbox_min": [
+   -1.23,
+   0.002,
+   -3.596
+  ],
+  "bbox_max": [
+   1.23,
+   3.3,
+   3.605
+  ],
+  "size_xyz": [
+   2.46,
+   3.298,
+   7.201
+  ],
+  "build_s": 21.0,
+  "export_s": 1.0,
+  "kb": 1042
+ }
+}

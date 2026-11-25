@@ -1,0 +1,20 @@
+{
+  "name": "rv",
+  "version": "0.1.0",
+  "description": "A harness for code-made motion design: deterministic frames, springs, beat grids, synthesized sound, and a self-review loop.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "bin": {
+    "rv": "bin/rv.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "geist": "1.7.2",
+    "three": "0.160.0"
+  }
+}

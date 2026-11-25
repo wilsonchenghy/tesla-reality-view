@@ -1,0 +1,38 @@
+rv: a harness for code-made motion design
+
+  rv new <name> [--template dom|canvas|three|song] [--size 1080x1920] [--no-loop]
+  rv review <piece>             the whole battery (check, plan, beats, motion, audio, trace) and one
+                                   prioritized list of what to fix or look at
+  rv taste <piece>              heuristic default-look checks: purple gradients, glow, centred-everything,
+                                   text contrast against the real pixels, no lead accent (hints)
+  rv plan <piece>               the cue list on the beat grid (bar.beat, frame, time): show it before building
+  rv check <piece>              determinism (two passes, reversed), loop seam, guards, page errors,
+                                   network, fonts, ms/frame, audio loudness
+  rv stills <piece> --t 0,1.5   exact frames -> labelled contact sheet (also --frames, --every N, --n 12,
+                                   --beats [--div 2], --sub 4 for motion blur, --scale 2, --cols, --width, --tag before|after for A/B sheets,
+                                   --query dbg=1 appended to the piece URL for debug views)
+  rv beats <piece> [--div 2]    one frame per beat (or per 8th): is something happening on every beat?
+  rv sheet <piece> [--every 12] contact sheet of the whole piece
+  rv onion <piece> --from 1 --to 1.5 [--n 10]   onion skin: spacing shows easing
+  rv trace <piece> [--keys a,b] plot probe(t) values + speed; flags linear runs, dead stops, jumps
+  rv motion <piece> [--step 2]  motion energy per frame + beat grid; dead time, quiet beats, seam
+  rv audio <piece> [--file x.mp4]  synthesize + measure: per-hit timing vs picture, level over bed,
+                                   loudness trace, spectrogram (you cannot listen: read these)
+  rv render <piece>             mp4 (H.264, -14 LUFS) with 4 subframes of linear-light motion blur
+                                   --patch 4.5-6 (re-render only that range into the last full render)
+                                   --draft (half size, 30 fps, no blur: a quick pacing check)
+                                   --sub 8 --shutter 0.5 --shutter-phase start|center --scale 2 (supersample) --from 2 --to 4 --fps 30
+                                   --gif [--gif-width 960] --frames (keep PNGs) --reuse-audio --no-audio
+                                   --workers 4 --crf 16 --lufs -14
+                                   adaptive blur: fast frames re-captured with up to --sub-max 16 subframes
+                                   within --refine-budget 1 (x base captures); --no-adaptive to skip
+  rv study <video>              measure a reference (or any render, e.g. Blender): cuts, shot lengths,
+                                   held frames, palette, energy, tempo -> shots.png + bible.md skeleton
+  rv compare <ref.mp4> <yours.mp4>  study both; where your style drifts from the reference
+  rv analyze <song.wav>         tempo, beat grid, first downbeat (cut a piece to a supplied song)
+  rv share <in.mp4> [--max-mb 25]   two-pass re-encode that fits a size budget (uploads, platform caps)
+  rv gif <in.mp4> [out.gif]     one-palette GIF
+  rv preview <piece>            serve the interactive player (space, arrows, shift+arrows = beat, M, G)
+  rv list                       pieces in pieces/
+
+Outputs land in out/<piece>/. Read the PNGs: they are the review loop.
