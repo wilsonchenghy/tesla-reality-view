@@ -1,5 +1,6 @@
 #!/bin/bash
 # Local single-GPU path (tested on a 16 GB RTX 5070 Ti). Environment:
+#   DIFIX_DTYPE=fp16  halves Difix memory when another job shares the GPU
 #   WORK   working directory for packs, runs and logs (default ~/rv-work)
 #   PY     python with torch (CUDA), gsplat, ultralytics, diffusers 0.25.1 / transformers 4.38 / peft 0.9 (Difix),
 #          pandas, pyarrow, onnxruntime, pycolmap (default: python3)
@@ -34,6 +35,8 @@ $PY -u $R/$PR/roadsplat_gpu.py --gs $G --cams cameras_rig3_t.json --world $W/v-c
 $PY -u $R/$PR/refine_job.py --data $G --cams cameras_rig3_t.json --ply $W/v-c$N/splats.ply --road $W/road-c$N/road_gs.bin --out $W/refine-c$N || $PY -u $R/$PR/refine_finish.py $W/refine-c$N $G
 date
 cd $R
-$PY $PR/traffic3d.py --dets $W/dets_c$N.json --cams $G/cameras_rig3.json --index $W/index_solved_c$N.json --static-masks $G/masks_tracks --out $W/tracks_c${N}_final.json
+$PY $PR/road_map.py --cams $G/cameras_rig3.json --out $G/road_map.npz
+$PY $PR/road_map.py --chase $G/chase_cams.json --frames $W/refine-c$N/frames --out $G/road_map_chase.npz
+$PY $PR/traffic3d.py --dets $W/dets_c$N.json --cams $G/cameras_rig3.json --index $W/index_solved_c$N.json --static-masks $G/masks_tracks --road-map $G/road_map_chase.npz $G/road_map.npz --out $W/tracks_c${N}_final.json
 TRACKS=$W/tracks_c${N}_final.json DATA16=$D PACK=$G $J/local_piece.sh $W/refine-c$N $W/road-c$N $W/refine-c$N/frames c$N 0
 echo CLIP_GPU_DONE

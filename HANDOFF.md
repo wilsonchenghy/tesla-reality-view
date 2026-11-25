@@ -27,24 +27,37 @@ Scene: clip_00, drive time 6–26 s (a left turn through an intersection, then 4
 | World | 3D Gaussian splatting (gsplat) on 2,166 views (16 fps keyframes × 6 cams), depth-supervised, ego-volume floater pruning | held-out PSNR **23.46** |
 | Road | separate layer: 4.2 M flat 5 cm Gaussians cast from the nearest views, lane-line (ECC) registration, per-camera shading maps | sharp paint, small residual quilt |
 | Clean-up | Difix3D+ (`nvidia/difix_ref`): render the chase path → Difix → fine-tune the world on cleaned views + real photos → render → Difix → RAFT deflicker; references are real front frames with only **moving** cars inpainted | removes most splat blur; flicker controlled |
-| Traffic | `traffic3d.py`: YOLO11-seg on every solved view → ground lift through the solved pose, fused with a known-height range cue and a box fit along the bearing → per-keyframe multi-camera fusion → constant-velocity Kalman filter + Hungarian association + RTS smoother; parked vs moving by bearing triangulation; road prior; no two vehicles may overlap | `proj_eval.py` on 11.6 k detections: recall 0.09 → **0.6**, precision 0.32 → 0.35 (3D boxes projected against tight 2D boxes, IoU ≥ 0.3) |
+| Traffic | `traffic3d.py`: YOLO11-seg on every solved view → ground lift through the solved pose, fused with a known-height range cue and a box fit along the bearing → per-keyframe multi-camera fusion → constant-velocity Kalman filter + Hungarian association + RTS smoother; parked vs moving by bearing triangulation; track pieces going the same way are joined (`stitch`), and tracks fade in/out over 0.3 s instead of coasting; `road_map.py` (SegFormer road / sidewalk / terrain votes cast onto the ground, from the rendered chase views first and the camera views as fallback) and every off-road sample slides along its viewing ray onto the road; no two vehicles may overlap | `proj_eval.py` (drawn 3D boxes projected into every view against the 2D detections, IoU ≥ 0.3, scoring what the page draws): precision **0.41**, recall **0.42**; 4.7% of drawn samples off the road |
 | HUD | speed, PRND, blinkers, Self-Driving state, maneuver card, sky chevrons, blue path; all values from telemetry | done |
 
 Everything runs on one 16 GB desktop GPU (RTX 5070 Ti): world 25 min, road 10 min, clean-up 35 min, traffic + piece 10 min.
 
 Other clips: **clip_04** (drive time 270–290 s, a different town) runs through the same jobs with no tuning: held-out
-PSNR **22.93**, 92 traffic tracks. Demo: `out/reality/reality.mp4` after `local_clip_gpu.sh clip_04 270`.
+PSNR **22.93**; traffic precision 0.46, recall 0.36, about 11% of drawn samples off the road (two oncoming cars sit on the
+median grass at 14 s and 16 s). Demo: `out/reality/reality.mp4` after `local_clip_gpu.sh clip_04 270`.
+**clip_02** (drive time 140 s, highway) also runs end to end, but its traffic is weak: precision 0.26, recall 0.09, only 9
+cars drawn, two of them overlapping at 2–5 s and one sideways at 5 s.
 
 ## The open problems, in priority order
 
-1. **Traffic precision.** Recall is good; precision is held back by duplicate fragments in dense parking rows and by
-   range errors beyond ~30 m (flat-ground lift and the height cue both degrade). Next: a learned monocular 3D detector
-   (Omni3D / Cube R-CNN style) for range and orientation, and track-to-track merging across short gaps.
-2. **Far vehicles on the road.** Beyond ~40 m the flow test cannot tell a waiting car from a parked one and no track
-   reaches it, so an occasional far car stays in the world. Tracks with longer range (item 1) fix this.
-3. **Highway generalisation.** clip_02 (60 mph) needs telemetry speed and heading as pose priors in the bundle
-   adjustment: the free solve drifts along a straight road with repetitive dashes.
-4. **CAD vehicle look.** The models read as CG next to the photographic street (lighting comes from the per-second
+1. **Traffic range.** About 40% of drawn cars match a real car, and the main error is range: it comes from a 2D box plus
+   a flat-ground lift, so half a degree of slope or pitch is metres at 50 m. Projected boxes are also 1.2–2.2× wider
+   than the detections (back camera 2.2×), and the lead car lands about 1 m right. The road map and ray slide only patch
+   this. A production stack (e.g. Tesla's) instead runs one learned multi-camera network that outputs 3D objects directly,
+   trained on auto-labelled 3D data. Next, in order:
+   - a metric depth model (Depth Anything V2 Metric, UniDepth or Metric3D) sampled inside each detection as the range
+     cue; the packs' `depth/*.npy` are relative (0..1), not metric. It needs a separate Python env (the Difix pins hold
+     `transformers` at 4.38);
+   - a pretrained monocular 3D detector (Omni3D / Cube R-CNN) for range and heading.
+   Measure each with `proj_eval.py` plus the off-road share on clip_00, clip_04 and clip_02, and check every second of
+   the render.
+2. **Highway traffic (clip_02).** Recall 0.09: at highway range the flat-ground lift fails first. Item 1 is the fix.
+3. **Far vehicles on the road.** Beyond ~40 m the flow test cannot tell a waiting car from a parked one and no track
+   reaches it, so an occasional far car stays in the world. Tracks with longer range (item 1) fix this. clip_00 has
+   one at the intersection (3–5 s): a blurry grey car baked into the world.
+4. **Road map on the far side.** The trained world puts the far oncoming lanes about 3 m left of where the camera
+   ground projection does, so the camera map can disagree with what the viewer sees; the chase map is used first.
+5. **CAD vehicle look.** The models read as CG next to the photographic street (lighting comes from the per-second
    street panoramas, `pano.py`).
 
 ## How to run
@@ -72,7 +85,8 @@ The steps inside, in order: `prep.py` → `cars.py` → `prep.py --skip-frames -
 vehicle instance) → `camdump.mjs` (chase path, via `local_piece.sh` with `CAMDUMP_ONLY=1`) → `force_moving.py` →
 `detect_pinhole.py` → `traffic3d.py` → `track_masks.py` (3D verdict per instance) → `make_refs.py` + `motion_masks.py
 --frames --inpaint` (Difix references) → `gs_train.py` → `roadsplat_gpu.py` → `refine_job.py` (`refine_finish.py`
-resumes it after an interrupted Difix pass) → `traffic3d.py` again with the final masks → `local_piece.sh` (`sfm_align.py`,
+resumes it after an interrupted Difix pass) → `road_map.py` (camera views, then `--chase` on the rendered frames) →
+`traffic3d.py` again with the final masks and both road maps → `local_piece.sh` (`sfm_align.py`,
 tracks into `index.json`, `dedupe_cars.py`, `car_sanity.py`, `pano.py`, `rv check`, `rv render`).
 
 `proj_eval.py` scores any track set against the detections (precision, recall, IoU of projected 3D boxes).
