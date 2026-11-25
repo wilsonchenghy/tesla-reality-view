@@ -5,7 +5,8 @@ sys.path.insert(0, os.environ.get('DIFIX_SRC', '/tmp/Difix3D/src'))   # a clone 
 from pipeline_difix import DifixPipeline
 src, dst, ref, start, step = sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4]), int(sys.argv[5])
 os.makedirs(dst, exist_ok=True)
-pipe = DifixPipeline.from_pretrained('nvidia/difix_ref', trust_remote_code=True).to('cuda'); pipe.set_progress_bar_config(disable=True)
+dt = {'fp32': torch.float32, 'fp16': torch.float16}[os.environ.get('DIFIX_DTYPE', 'fp32')]   # fp16 halves memory when the GPU is shared
+pipe = DifixPipeline.from_pretrained('nvidia/difix_ref', trust_remote_code=True, torch_dtype=dt).to('cuda'); pipe.set_progress_bar_config(disable=True)
 for f in sorted(glob.glob(f'{src}/*.jpg'))[start::step]:
     n = os.path.basename(f)
     if os.path.exists(f'{dst}/{n}'): continue                     # resume
